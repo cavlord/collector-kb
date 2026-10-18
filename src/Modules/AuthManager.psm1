@@ -27,7 +27,7 @@ function Invoke-IbmLoginSSO {
     #>
     param(
         [string]$ClientId = "ibm-doc-collector",
-        [string]$RedirectUri = "http://127.0.0.1:18080/",
+        [string]$RedirectUri = "http://localhost:18080/",
         [string]$AuthorizeBaseUrl = "https://login.ibm.com/authorize",
         [string]$TokenUrl = "https://login.ibm.com/token",
         [switch]$NoBrowser
@@ -80,29 +80,50 @@ function Invoke-IbmLoginSSO {
         }
 
         Write-Host "Waiting for authentication callback on $RedirectUri ..." -ForegroundColor Yellow
+        Write-Log -Level INFO -Category Auth -Message "HTTP listener started; awaiting callback on $RedirectUri"
         $context = $listener.GetContext()
         $request = $context.Request
         $response = $context.Response
 
-        $code = $request.QueryString["code"]
-        $returnedState = $request.QueryString["state"]
+        Write-Log -Level INFO -Category Auth -Message "Callback received: $($request.Url)"
 
-        # Validate state
-        if ($returnedState -ne $state) {
-            $errorMsg = "State mismatch! Expected '$state', got '$returnedState'"
+        $code          = $request.QueryString["code"]
+        $returnedState = $request.QueryString["state"]
+        $asError       = $request.QueryString["error"]
+        $asErrorDesc   = $request.QueryString["error_description"]
+
+        # Surface any AS-returned error immediately
+        if ($asError) {
+            $errorMsg = "Authorization server error: $asError — $asErrorDesc"
             Write-Log -Level ERROR -Category Auth -Message $errorMsg
+            $html = "<html><body><h2>Login failed</h2><p>$asError: $asErrorDesc</p><p>You may close this window.</p></body></html>"
             $response.StatusCode = 400
-            $responseBuffer = [System.Text.Encoding]::UTF8.GetBytes("Error: State mismatch")
+            $response.ContentType = "text/html"
+            $responseBuffer = [System.Text.Encoding]::UTF8.GetBytes($html)
             $response.ContentLength64 = $responseBuffer.Length
             $response.OutputStream.Write($responseBuffer, 0, $responseBuffer.Length)
             $response.OutputStream.Close()
             return $false
         }
 
-        # Respond to browser with "/" as requested
+        # Validate state
+        if ($returnedState -ne $state) {
+            $errorMsg = "State mismatch! Expected '$state', got '$returnedState'"
+            Write-Log -Level ERROR -Category Auth -Message $errorMsg
+            $response.StatusCode = 400
+            $response.ContentType = "text/html"
+            $responseBuffer = [System.Text.Encoding]::UTF8.GetBytes("<html><body><h2>Error: State mismatch</h2><p>You may close this window.</p></body></html>")
+            $response.ContentLength64 = $responseBuffer.Length
+            $response.OutputStream.Write($responseBuffer, 0, $responseBuffer.Length)
+            $response.OutputStream.Close()
+            return $false
+        }
+
+        # Tell the browser the handoff is done
         $response.StatusCode = 200
-        $response.ContentType = "text/plain"
-        $responseBuffer = [System.Text.Encoding]::UTF8.GetBytes("/")
+        $response.ContentType = "text/html"
+        $html = "<html><body><h2>Login successful</h2><p>You may close this window and return to the CLI.</p></body></html>"
+        $responseBuffer = [System.Text.Encoding]::UTF8.GetBytes($html)
         $response.ContentLength64 = $responseBuffer.Length
         $response.OutputStream.Write($responseBuffer, 0, $responseBuffer.Length)
         $response.OutputStream.Close()
