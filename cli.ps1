@@ -1,19 +1,4 @@
-#!/usr/bin/env pwsh
-<#
-.SYNOPSIS
-  ibm-doc-collector — IBM Troubleshooting Documentation Collector CLI
-.DESCRIPTION
-  Collects IBM documentation from configured sources, deduplicates, and uploads to SharePoint.
-.EXAMPLE
-  ibm-doc-collector init
-  ibm-doc-collector auth ibm
-  ibm-doc-collector auth sharepoint
-  ibm-doc-collector collect --category Support
-  ibm-doc-collector status
-  ibm-doc-collector report
-  ibm-doc-collector doctor
-#>
-param(
+﻿param(
     [Parameter(Position = 0)][string]$Command  = 'help',
     [Parameter(Position = 1)][string]$SubArg   = '',
     [string]$Category = ''
@@ -22,14 +7,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+#  Paths 
 $AppRoot   = $PSScriptRoot
 $ModuleDir = Join-Path $AppRoot 'src\Modules'
 $DataDir   = Join-Path $AppRoot 'data'
 $LogDir    = Join-Path $DataDir 'logs'
 $StagingDir= Join-Path $DataDir 'staging'
 
-# ── Module imports ─────────────────────────────────────────────────────────────
+#  Module imports 
 Import-Module (Join-Path $ModuleDir 'Logger.psm1')           -Force -Global
 Import-Module (Join-Path $ModuleDir 'Config.psm1')           -Force -Global
 Import-Module (Join-Path $ModuleDir 'AuthManager.psm1')      -Force -Global
@@ -42,29 +27,20 @@ Initialize-Logger     -LogDir $LogDir
 Initialize-Config     -ConfigDir $DataDir
 Initialize-MetadataStore -DataDir $DataDir
 
-# ── Banner ────────────────────────────────────────────────────────────────────
+#--- Banner --------------------------------------------------------------------
 $_version = '1.0.0'
+$ProjectName = 'IBMi'
 Write-Host ""
-Write-Host "  ██╗██████╗ ███╗   ███╗    ██████╗  ██████╗  ██████╗" -ForegroundColor Cyan
-Write-Host "  ██║██╔══██╗████╗ ████║    ██╔══██╗██╔═══██╗██╔════╝" -ForegroundColor Cyan
-Write-Host "  ██║██████╔╝██╔████╔██║    ██║  ██║██║   ██║██║     " -ForegroundColor Magenta
-Write-Host "  ██║██╔══██╗██║╚██╔╝██║    ██║  ██║██║   ██║██║     " -ForegroundColor Magenta
-Write-Host "  ██║██████╔╝██║ ╚═╝ ██║    ██████╔╝╚██████╔╝╚██████╗" -ForegroundColor DarkMagenta
-Write-Host "  ╚═╝╚═════╝ ╚═╝     ╚═╝    ╚═════╝  ╚═════╝  ╚═════╝" -ForegroundColor DarkMagenta
+Write-Host "  ___ ___   ___  ___   ___   ___  ___  ___ "
+Write-Host " | __| _ \ / _ \| _ \ / _ \ / _ \| _ \| _ \ "
+Write-Host " | _||   /|  _/|  _/ \  _/ \  _/|  _/|  _/ "
+Write-Host " |___|__\_\|___|_|   |_||_| |_||_| |_| |_|_| "
 Write-Host ""
-Write-Host "  ██████╗ ██████╗ ██╗     ██╗     ███████╗ ██████╗████████╗ ██████╗ ██████╗ " -ForegroundColor DarkCyan
-Write-Host "  ██╔════╝██╔═══██╗██║     ██║     ██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗" -ForegroundColor DarkCyan
-Write-Host "  ██║     ██║   ██║██║     ██║     █████╗  ██║        ██║   ██║   ██║██████╔╝" -ForegroundColor Cyan
-Write-Host "  ██║     ██║   ██║██║     ██║     ██╔══╝  ██║        ██║   ██║   ██║██╔══██╗" -ForegroundColor Cyan
-Write-Host "  ╚██████╗╚██████╔╝███████╗███████╗███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║" -ForegroundColor Magenta
-Write-Host "   ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝" -ForegroundColor Magenta
-Write-Host ""
-Write-Host "  $('-' * 70)" -ForegroundColor DarkGray
-Write-Host "  v$_version  |  IBM Troubleshooting Documentation Collector" -ForegroundColor DarkGray
-Write-Host "  $('-' * 70)" -ForegroundColor DarkGray
+Write-Host "  v$_version  |  $ProjectName Troubleshooting Documentation Collector"
+Write-Host "  $('-' * 60)"
 Write-Host ""
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+#  Helpers 
 function Coalesce {
     param([object]$Left, [object]$Right)
     if ($null -ne $Left) { $Left } else { $Right }
@@ -75,22 +51,22 @@ function Require-Config {
     $cfg = Get-Config
     foreach ($k in $Keys) {
         if (-not $cfg.ContainsKey($k) -or -not $cfg[$k]) {
-            Write-Host "Missing config key '$k'. Run: ibm-doc-collector init" -ForegroundColor Red
+            Write-Host "Missing config key '$k'. Run: ibmi-doc-collector init" -ForegroundColor Red
             exit 1
         }
     }
     return $cfg
 }
 
-# ══════════════════════════════════════════════════════════════════════════════
+# 
 #  COMMANDS
-# ══════════════════════════════════════════════════════════════════════════════
+# 
 
 switch ($Command.ToLower()) {
 
-    # ── init ──────────────────────────────────────────────────────────────────
+    #  init 
     'init' {
-        Write-Host "`n=== ibm-doc-collector init ===" -ForegroundColor Cyan
+        Write-Host "`n=== ibmi-doc-collector init ===" -ForegroundColor Cyan
 
         $tenantId     = Read-Host "Microsoft Tenant ID"
         $siteId       = Read-Host "SharePoint Site ID (e.g. contoso.sharepoint.com,/sites/mysite)"
@@ -114,11 +90,11 @@ switch ($Command.ToLower()) {
         Write-Log -Level INFO -Message "Configuration saved."
         Write-Host "Done. Config written to: $(Get-ConfigPath)" -ForegroundColor Green
         Write-Host "Next steps:"
-        Write-Host "  ibm-doc-collector auth ibm"
-        Write-Host "  ibm-doc-collector auth sharepoint"
+        Write-Host "  ibmi-doc-collector auth ibm"
+        Write-Host "  ibmi-doc-collector auth sharepoint"
     }
 
-    # ── auth ──────────────────────────────────────────────────────────────────
+    #  auth 
     'auth' {
         switch ($SubArg.ToLower()) {
             'ibm' {
@@ -145,22 +121,22 @@ switch ($Command.ToLower()) {
                 }
             }
             default {
-                Write-Host "Usage: ibm-doc-collector auth [ibm|sharepoint]" -ForegroundColor Yellow
+                Write-Host "Usage: ibmi-doc-collector auth [ibm|sharepoint]" -ForegroundColor Yellow
                 exit 1
             }
         }
     }
 
-    # ── collect ───────────────────────────────────────────────────────────────
+    #  collect 
     'collect' {
         $cfg = Require-Config -Keys @('tenantId','siteId','libraryName','folderPath')
 
         if (-not (Test-IbmAuthenticated)) {
-            Write-Host "IBM session not active. Run: ibm-doc-collector auth ibm" -ForegroundColor Red
+            Write-Host "IBM session not active. Run: ibmi-doc-collector auth ibm" -ForegroundColor Red
             exit 1
         }
         if (-not (Test-MicrosoftAuthenticated)) {
-            Write-Host "Microsoft session not active. Run: ibm-doc-collector auth sharepoint" -ForegroundColor Red
+            Write-Host "Microsoft session not active. Run: ibmi-doc-collector auth sharepoint" -ForegroundColor Red
             exit 1
         }
 
@@ -216,7 +192,7 @@ switch ($Command.ToLower()) {
         Write-Log -Level INFO -Message "Collect done: new=$totalNew updated=$totalUpdated skipped=$totalSkipped"
     }
 
-    # ── status ────────────────────────────────────────────────────────────────
+    #  status 
     'status' {
         $stats = Get-MetadataStats
         Write-Host "`n=== Collection Status ===" -ForegroundColor Cyan
@@ -231,7 +207,7 @@ switch ($Command.ToLower()) {
         }
     }
 
-    # ── report ────────────────────────────────────────────────────────────────
+    #  report 
     'report' {
         $all = Get-AllMetadata
         if ($all.Count -eq 0) {
@@ -245,7 +221,7 @@ switch ($Command.ToLower()) {
         Write-Host "Report saved: $reportPath" -ForegroundColor Green
     }
 
-    # ── doctor ────────────────────────────────────────────────────────────────
+    #  doctor 
     'doctor' {
         Write-Host "`n=== Doctor Check ===" -ForegroundColor Cyan
         $checks = [ordered]@{}
@@ -284,7 +260,7 @@ switch ($Command.ToLower()) {
         $allGood = $true
         foreach ($k in $checks.Keys) {
             $ok = $checks[$k]
-            $icon  = if ($ok) { '✓' } else { '✗' }
+            $icon  = if ($ok) { '' } else { '' }
             $color = if ($ok) { 'Green' } else { 'Red' }
             Write-Host ("  $icon  {0}" -f $k) -ForegroundColor $color
             if (-not $ok) { $allGood = $false }
@@ -294,15 +270,15 @@ switch ($Command.ToLower()) {
         if ($allGood) {
             Write-Host "All checks passed." -ForegroundColor Green
         } else {
-            Write-Host "Some checks failed. Address items marked ✗ above." -ForegroundColor Yellow
+            Write-Host "Some checks failed. Address items marked  above." -ForegroundColor Yellow
         }
     }
 
-    # ── help / default ────────────────────────────────────────────────────────
+    #  help / default 
     default {
         Write-Host @"
 
-ibm-doc-collector — IBM Troubleshooting Documentation Collector
+ibmi-doc-collector  IBM Troubleshooting Documentation Collector
 
 Usage:
   .\cli.ps1 init                        Configure tenant, site, library, folder
@@ -316,3 +292,17 @@ Usage:
 "@
     }
 }
+
+#  Banner 
+$_version = '1.0.0'
+Write-Host ""
+Write-Host "  ___ ___   ___  ___   ___   ___  ___  ___ "
+Write-Host " | __| _ \ / _ \| _ \ / _ \ / _ \| _ \| _ \ "
+Write-Host " | _||   /|  _/|  _/ \  _/ \  _/|  _/|  _/ "
+Write-Host " |___|_|_\_|___|_|   |_||_| |_||_| |_| |_|_| "
+Write-Host ""
+Write-Host "  v$_version  |  $ProjectName  Documentation Collector"
+Write-Host "  $('-' * 60)"
+Write-Host ""
+
+

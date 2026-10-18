@@ -35,7 +35,7 @@ function Invoke-UploadToSharePoint {
         }
 
         # 2. Ensure folder exists (create if not)
-        $folderApiUrl = "https://graph.microsoft.com/v1.0/drives/$($drive.id)/root:/$FolderPath"
+        $folderApiUrl = 'https://graph.microsoft.com/v1.0/drives/' + $drive.id + '/root:/' + $FolderPath
         try {
             Invoke-RestMethod -Uri $folderApiUrl -Headers $headers -Method Get | Out-Null
         }
