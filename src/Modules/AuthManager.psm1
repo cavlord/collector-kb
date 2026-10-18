@@ -27,7 +27,7 @@ function Invoke-IbmLoginSSO {
     #>
     param(
         [string]$ClientId = "ibm-doc-collector",
-        [string]$RedirectUri = "http://localhost:18080/",
+        [string]$RedirectUri = "http://127.0.0.1:18080/",
         [string]$AuthorizeBaseUrl = "https://login.ibm.com/authorize",
         [string]$TokenUrl = "https://login.ibm.com/token",
         [switch]$NoBrowser
