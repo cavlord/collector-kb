@@ -90,22 +90,36 @@ switch ($Command.ToLower()) {
         Write-Log -Level INFO -Message "Configuration saved."
         Write-Host "Done. Config written to: $(Get-ConfigPath)" -ForegroundColor Green
         Write-Host "Next steps:"
-        Write-Host "  ibmi-doc-collector auth ibm"
+        Write-Host "  ibmi-doc-collector auth ibm sso"
         Write-Host "  ibmi-doc-collector auth sharepoint"
     }
 
-    #  auth 
+    #  auth
     'auth' {
         switch ($SubArg.ToLower()) {
             'ibm' {
-                Write-Host "`n=== IBM Authentication ===" -ForegroundColor Cyan
-                $user = Read-Host "IBMid email"
-                $pass = Read-Host "IBMid password" -AsSecureString
-                $ok   = Invoke-IbmLogin -Username $user -Password $pass
+                if ($args -contains 'sso') {
+                    Write-Host "`n=== IBM SSO Authentication ===" -ForegroundColor Cyan
+                    $ok = Invoke-IbmLoginSSO
+                    if ($ok) {
+                        Write-Host "IBM authentication successful." -ForegroundColor Green
+                    } else {
+                        Write-Host "IBM authentication failed." -ForegroundColor Red
+                        exit 1
+                    }
+                } else {
+                    Write-Host "Manual password login is deprecated and removed." -ForegroundColor Yellow
+                    Write-Host "Please use: ibmi-doc-collector auth ibm sso" -ForegroundColor Yellow
+                    exit 1
+                }
+            }
+            'ibm sso' {
+                Write-Host "`n=== IBM SSO Authentication ===" -ForegroundColor Cyan
+                $ok = Invoke-IbmLoginSSO
                 if ($ok) {
                     Write-Host "IBM authentication successful." -ForegroundColor Green
                 } else {
-                    Write-Host "IBM authentication failed. Check credentials." -ForegroundColor Red
+                    Write-Host "IBM authentication failed." -ForegroundColor Red
                     exit 1
                 }
             }
@@ -121,18 +135,18 @@ switch ($Command.ToLower()) {
                 }
             }
             default {
-                Write-Host "Usage: ibmi-doc-collector auth [ibm|sharepoint]" -ForegroundColor Yellow
+                Write-Host "Usage: ibmi-doc-collector auth [ibm sso|sharepoint]" -ForegroundColor Yellow
                 exit 1
             }
         }
     }
 
-    #  collect 
+    #  collect
     'collect' {
         $cfg = Require-Config -Keys @('tenantId','siteId','libraryName','folderPath')
 
         if (-not (Test-IbmAuthenticated)) {
-            Write-Host "IBM session not active. Run: ibmi-doc-collector auth ibm" -ForegroundColor Red
+            Write-Host "IBM session not active. Run: ibmi-doc-collector auth ibm sso" -ForegroundColor Red
             exit 1
         }
         if (-not (Test-MicrosoftAuthenticated)) {
@@ -282,7 +296,7 @@ ibmi-doc-collector  IBM Troubleshooting Documentation Collector
 
 Usage:
   .\cli.ps1 init                        Configure tenant, site, library, folder
-  .\cli.ps1 auth ibm                    Authenticate with IBMid
+  .\cli.ps1 auth ibm sso                Authenticate with IBMid SSO
   .\cli.ps1 auth sharepoint             Authenticate with Microsoft (device-code)
   .\cli.ps1 collect [--category <cat>]  Fetch + upload documents
   .\cli.ps1 status                      Show collection + auth status
