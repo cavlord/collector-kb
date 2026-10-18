@@ -14,8 +14,11 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# ── Deteksi platform (PS5.1 & PS7 kompatibel) ─────────────────────────────────────
+$isWindows = ($env:OS -eq 'Windows_NT')
+
 # ── Tentukan bin dir sesuai platform ─────────────────────────────────────────
-if ($IsWindows) {
+if ($isWindows) {
     $BinDir = Join-Path $env:LOCALAPPDATA 'ibm-doc-collector\bin'
 } else {
     $BinDir = Join-Path $HOME '.local/share/ibm-doc-collector/bin'
@@ -37,7 +40,7 @@ Copy-Item -Path (Join-Path $ScriptRoot 'cli.ps1') -Destination $BinDir -Force
 Write-Host "Disalin  : cli.ps1" -ForegroundColor Cyan
 
 # ── 3. Salin launcher .cmd (Windows only) ────────────────────────────────────
-if ($IsWindows) {
+if ($isWindows) {
     $cmdSrc = Join-Path $ScriptRoot 'ibm-doc-collector.cmd'
     if (Test-Path $cmdSrc) {
         Copy-Item -Path $cmdSrc -Destination $BinDir -Force
@@ -56,7 +59,7 @@ Get-ChildItem -Path $ModuleDir -Filter '*.psm1' | ForEach-Object {
 }
 
 # ── 5. Daftarkan ke PATH ──────────────────────────────────────────────────────
-if ($IsWindows) {
+if ($isWindows) {
     $currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
     if (-not $currentPath) { $currentPath = '' }
     if ($currentPath -split ';' -notcontains $BinDir) {
