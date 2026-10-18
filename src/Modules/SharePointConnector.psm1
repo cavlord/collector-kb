@@ -44,9 +44,9 @@ function Invoke-UploadToSharePoint {
             $parentPath  = Split-Path $FolderPath -Parent
             $folderName  = Split-Path $FolderPath -Leaf
             $createUrl   = if ($parentPath) {
-                "https://graph.microsoft.com/v1.0/drives/$($drive.id)/root:/$parentPath:/children"
+                'https://graph.microsoft.com/v1.0/drives/' + $drive.id + '/root:/' + $parentPath + ':/children'
             } else {
-                "https://graph.microsoft.com/v1.0/drives/$($drive.id)/root/children"
+                'https://graph.microsoft.com/v1.0/drives/' + $drive.id + '/root/children'
             }
             $body = @{ name = $folderName; folder = @{}; '@microsoft.graph.conflictBehavior' = 'rename' } | ConvertTo-Json
             Invoke-RestMethod -Uri $createUrl -Headers $headers -Method Post -Body $body | Out-Null
@@ -55,7 +55,7 @@ function Invoke-UploadToSharePoint {
 
         # 3. Upload (simple upload for files ≤4 MB; large-file session for larger)
         $fileBytes = [System.IO.File]::ReadAllBytes($LocalFilePath)
-        $putUrl    = "https://graph.microsoft.com/v1.0/drives/$($drive.id)/root:/$FolderPath/$fileName`:/content"
+        $putUrl    = 'https://graph.microsoft.com/v1.0/drives/' + $drive.id + '/root:/' + $FolderPath + '/' + $fileName + ':/content'
 
         if ($fileBytes.Length -le 4MB) {
             $uploadHeaders = @{
@@ -83,7 +83,7 @@ function _Upload-LargeFile {
     param([string]$AccessToken, [string]$DriveId, [string]$RemotePath, [string]$LocalPath)
 
     $headers    = @{ Authorization = "Bearer $AccessToken"; 'Content-Type' = 'application/json' }
-    $sessionUrl = "https://graph.microsoft.com/v1.0/drives/$DriveId/root:/$RemotePath`:/createUploadSession"
+    $sessionUrl = 'https://graph.microsoft.com/v1.0/drives/' + $DriveId + '/root:/' + $RemotePath + ':/createUploadSession'
     $session    = Invoke-RestMethod -Uri $sessionUrl -Headers $headers -Method Post -Body '{}'
     $uploadUri  = $session.uploadUrl
 
