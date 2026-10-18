@@ -1,7 +1,7 @@
-﻿param(
+param(
     [Parameter(Position = 0)][string]$Command  = 'help',
     [Parameter(Position = 1)][string]$SubArg   = '',
-    [string]$Category = ''
+    [Parameter(Position = 2)][string]$Category = ''
 )
 
 Set-StrictMode -Version Latest
@@ -98,7 +98,7 @@ switch ($Command.ToLower()) {
     'auth' {
         switch ($SubArg.ToLower()) {
             'ibm' {
-                if ($args -contains 'sso') {
+                if ($Category -eq 'sso') {
                     Write-Host "`n=== IBM SSO Authentication ===" -ForegroundColor Cyan
                     $ok = Invoke-IbmLoginSSO
                     if ($ok) {
@@ -114,13 +114,16 @@ switch ($Command.ToLower()) {
                 }
             }
             'ibm sso' {
-                Write-Host "`n=== IBM SSO Authentication ===" -ForegroundColor Cyan
-                $ok = Invoke-IbmLoginSSO
-                if ($ok) {
-                    Write-Host "IBM authentication successful." -ForegroundColor Green
-                } else {
-                    Write-Host "IBM authentication failed." -ForegroundColor Red
-                    exit 1
+                # shortcut: dead branch — $SubArg is one token, never 'ibm sso'; kept for clarity
+                if ($Category -eq 'sso') {
+                    Write-Host "`n=== IBM SSO Authentication ===" -ForegroundColor Cyan
+                    $ok = Invoke-IbmLoginSSO
+                    if ($ok) {
+                        Write-Host "IBM authentication successful." -ForegroundColor Green
+                    } else {
+                        Write-Host "IBM authentication failed." -ForegroundColor Red
+                        exit 1
+                    }
                 }
             }
             'sharepoint' {
@@ -238,53 +241,55 @@ switch ($Command.ToLower()) {
     #  doctor 
     'doctor' {
         Write-Host "`n=== Doctor Check ===" -ForegroundColor Cyan
-        $checks = [ordered]@{}
-
-        # PowerShell version
-        $checks['PowerShell 7+'] = $PSVersionTable.PSVersion.Major -ge 7
-
-        # Config file
+        # Values: 'ok' | 'warn' (fixable via init/login) | 'fail' (truly broken)
+        $cfg     = Get-Config
         $cfgPath = Get-ConfigPath
-        $checks['Config exists'] = $cfgPath -and (Test-Path $cfgPath)
 
-        # Required config keys
-        $cfg = Get-Config
-        $checks['tenantId set']   = $cfg.ContainsKey('tenantId')    -and $cfg['tenantId']
-        $checks['siteId set']     = $cfg.ContainsKey('siteId')      -and $cfg['siteId']
-        $checks['libraryName set']= $cfg.ContainsKey('libraryName') -and $cfg['libraryName']
+        $checks = [ordered]@{}
+        $st = { param($b, $bad = 'warn') if ($b) { 'ok' } else { $bad } }
 
-        # Auth state
-        $checks['IBM authenticated']       = Test-IbmAuthenticated
-        $checks['SharePoint authenticated']= Test-MicrosoftAuthenticated
+        # App supports PS 5.1+
+        $v = $PSVersionTable.PSVersion
+        $checks['PowerShell 5.1+'] = & $st ($v.Major -gt 5 -or ($v.Major -eq 5 -and $v.Minor -ge 1)) 'fail'
 
-        # Optional modules
-        $checks['MSAL.PS installed']     = $null -ne (Get-Module -ListAvailable -Name MSAL.PS)
-        $checks['Az.Accounts installed'] = $null -ne (Get-Module -ListAvailable -Name Az.Accounts)
+        $checks['Config exists']   = & $st ($cfgPath -and (Test-Path $cfgPath))
+        foreach ($key in 'tenantId', 'siteId', 'libraryName') {
+            $checks["$key set"] = & $st ($cfg.ContainsKey($key) -and $cfg[$key])
+        }
+        $checks['IBM authenticated']        = & $st (Test-IbmAuthenticated)
+        $checks['SharePoint authenticated'] = & $st (Test-MicrosoftAuthenticated)
 
-        # SharePoint connectivity (only if authed)
-        if (Test-MicrosoftAuthenticated -and $cfg.ContainsKey('siteId')) {
+        # Either module is enough; only required once SharePoint is configured
+        $hasAuthModule = (Get-Module -ListAvailable -Name MSAL.PS) -or (Get-Module -ListAvailable -Name Az.Accounts)
+        $hasSiteId     = $cfg.ContainsKey('siteId') -and $cfg['siteId']
+        $checks['MSAL.PS or Az.Accounts installed'] = & $st (-not $hasSiteId -or $hasAuthModule) 'warn'
+
+        # SharePoint connectivity (only if authed): authed + configured but unreachable is broken
+        if ($checks['SharePoint authenticated'] -eq 'ok' -and $hasSiteId) {
             try {
                 $token = Get-MicrosoftAccessToken
-                $checks['SharePoint reachable'] = Test-SharePointConnection -AccessToken $token -SiteId $cfg['siteId']
+                $checks['SharePoint reachable'] = & $st (Test-SharePointConnection -AccessToken $token -SiteId $cfg['siteId']) 'fail'
             } catch {
-                $checks['SharePoint reachable'] = $false
+                $checks['SharePoint reachable'] = 'fail'
             }
         }
 
-        $allGood = $true
+        $mark  = @{ ok = '[OK]  '; warn = '[WARN]'; fail = '[FAIL]' }
+        $color = @{ ok = 'Green';  warn = 'Yellow'; fail = 'Red' }
         foreach ($k in $checks.Keys) {
-            $ok = $checks[$k]
-            $icon  = if ($ok) { '' } else { '' }
-            $color = if ($ok) { 'Green' } else { 'Red' }
-            Write-Host ("  $icon  {0}" -f $k) -ForegroundColor $color
-            if (-not $ok) { $allGood = $false }
+            $s = $checks[$k]
+            Write-Host ("  {0} {1}" -f $mark[$s], $k) -ForegroundColor $color[$s]
         }
 
+        $failed = @($checks.Values | Where-Object { $_ -eq 'fail' }).Count
+        $warned = @($checks.Values | Where-Object { $_ -eq 'warn' }).Count
         Write-Host ""
-        if ($allGood) {
-            Write-Host "All checks passed." -ForegroundColor Green
+        if ($failed) {
+            Write-Host "$failed check(s) failed. Fix items marked [FAIL]." -ForegroundColor Red
+        } elseif ($warned) {
+            Write-Host "No failures. $warned warning(s): run 'init' / login to complete setup." -ForegroundColor Yellow
         } else {
-            Write-Host "Some checks failed. Address items marked  above." -ForegroundColor Yellow
+            Write-Host "All checks passed." -ForegroundColor Green
         }
     }
 
