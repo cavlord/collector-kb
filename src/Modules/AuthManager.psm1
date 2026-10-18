@@ -26,7 +26,8 @@ function Invoke-IbmLoginSSO {
     Returns $true on success, $false on failure.
     #>
     param(
-        [string]$ClientId = "ibm-doc-collector",
+        # IBM rejects unregistered client_ids with 'not authorized'; set IBM_SSO_CLIENT_ID to the registered one.
+        [string]$ClientId = $(if ($env:IBM_SSO_CLIENT_ID) { $env:IBM_SSO_CLIENT_ID } else { "ibm-doc-collector" }),
         [string]$RedirectUri = "http://localhost:18080/",
         [string]$AuthorizeBaseUrl = "https://login.ibm.com/authorize",
         [string]$TokenUrl = "https://login.ibm.com/token",
@@ -102,6 +103,9 @@ function Invoke-IbmLoginSSO {
     $authorizeUrl = "${AuthorizeBaseUrl}?response_type=code&client_id=${ClientId}&redirect_uri=${activeRedirectUri}&state=${state}&code_challenge=${code_challenge}&code_challenge_method=S256&scope=openid"
 
     try {
+        # IBM matches client_id + redirect_uri exactly against its registration; show both so they can be checked.
+        Write-Host "client_id:    $ClientId" -ForegroundColor Gray
+        Write-Host "redirect_uri: $activeRedirectUri (must be registered at IBM)" -ForegroundColor Gray
         # Open browser
         Write-Host "Opening browser for IBM SSO Login..." -ForegroundColor Cyan
         Write-Host "If the browser does not open automatically, navigate to:" -ForegroundColor Gray
@@ -150,7 +154,7 @@ function Invoke-IbmLoginSSO {
         }
 
         # Validate state
-        if ($returnedState -ne $state) {
+        if ($returnedState -cne $state) {
             $errorMsg = "State mismatch! Expected '$state', got '$returnedState'"
             Write-Log -Level ERROR -Category Auth -Message $errorMsg
             $response.StatusCode = 400
