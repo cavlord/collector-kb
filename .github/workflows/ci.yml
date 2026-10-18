@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Pester Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PowerShell
+        uses: actions/setup-python@v5   # pwsh is pre-installed on ubuntu-latest runners
+
+      - name: Install Pester
+        shell: pwsh
+        run: Install-Module Pester -Force -Scope CurrentUser
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          $result = Invoke-Pester -Path './tests' -Output Detailed -PassThru
+          if ($result.FailedCount -gt 0) { exit 1 }
+
+      - name: Lint — no hardcoded secrets check
+        shell: pwsh
+        run: |
+          $bad = Select-String -Path './src/Modules/*.psm1', './cli.ps1' `
+                               -Pattern '(password|token|secret)\s*=\s*["''][^$"'']' `
+                               -CaseSensitive:$false
+          if ($bad) {
+            $bad | ForEach-Object { Write-Host $_ }
+            Write-Host "Potential hardcoded secret found." -ForegroundColor Red
+            exit 1
+          }
+          Write-Host "No hardcoded secrets detected." -ForegroundColor Green
