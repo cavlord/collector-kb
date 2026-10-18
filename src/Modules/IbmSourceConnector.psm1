@@ -46,7 +46,7 @@ function Get-IbmDocumentList {
 
         # Lightweight regex link extraction — sufficient for structured IBM pages
         # shortcut: no HTML parser; misses JS-rendered links, upgrade to HtmlAgilityPack if needed
-        $pattern = 'href=["\'](?<url>https?://[^"'']+\.(?:pdf|html|htm))["\']'
+        $pattern = "href=[`"'](?<url>https?://[^`"']+\.(?:pdf|html|htm))[`"']"
         $matches  = [regex]::Matches($html, $pattern, 'IgnoreCase')
 
         foreach ($m in $matches) {
@@ -89,7 +89,7 @@ function Get-IbmDocumentContent {
         $resp = $HttpClient.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseContentRead).Result
         $resp.EnsureSuccessStatusCode() | Out-Null
         $bytes = $resp.Content.ReadAsByteArrayAsync().Result
-        $ct    = $resp.Content.Headers.ContentType?.MediaType ?? 'application/octet-stream'
+        $ct    = if ($resp.Content.Headers -and $resp.Content.Headers.ContentType) { $resp.Content.Headers.ContentType.MediaType } else { 'application/octet-stream' }
         Write-Log -Level DEBUG -Category IBM -Message "Downloaded $($bytes.Length) bytes from $Url"
         return @{ Bytes = $bytes; ContentType = $ct }
     }
