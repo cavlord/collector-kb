@@ -49,51 +49,57 @@ function Invoke-IbmLoginSSO {
     # Generate state
     $state = [Guid]::NewGuid().ToString("N")
 
-    # If a specific RedirectUri was supplied, use it as-is; otherwise probe for a free port
-    # starting at 18080 so we can tell the authorize URL the real port before opening the browser.
+    # Bind the listener first (before opening the browser) so we know the real port.
+    # We try ports 18080-18099 and keep the first listener that binds successfully.
+    # shortcut: all 20 ports busy → login fails, upgrade: widen range or use ephemeral port.
+    $listener        = $null
+    $activeRedirectUri = $null
+
     if ($PSBoundParameters.ContainsKey('RedirectUri')) {
-        $activeRedirectUri = $RedirectUri
+        # Caller supplied an explicit URI — IBM does exact-string matching, so force localhost.
+        $activeRedirectUri = $RedirectUri -replace '//127\.0\.0\.1(?=[:/])', '//localhost'
+        if ($activeRedirectUri -ne $RedirectUri) {
+            Write-Log -Level WARN -Category Auth -Message "Rewrote redirect URI $RedirectUri -> $activeRedirectUri (IBM requires localhost)"
+        }
+        $listener = [System.Net.HttpListener]::new()
+        $listener.Prefixes.Add($activeRedirectUri)
+        try {
+            $listener.Start()
+            Write-Log -Level INFO -Category Auth -Message "HTTP listener started on $activeRedirectUri"
+        } catch {
+            $listener.Close()
+            $listener = $null
+            Write-Log -Level ERROR -Category Auth -Message "Failed to start listener on ${activeRedirectUri}: $($_.Exception.Message)"
+            Write-Host "Error: Could not start local HTTP listener on ${activeRedirectUri}: $($_.Exception.Message)" -ForegroundColor Red
+            return $false
+        }
     } else {
-        $activeRedirectUri = $null
-        foreach ($port in 18080..18089) {
+        foreach ($port in 18080..18099) {
             $candidate = "http://localhost:${port}/"
             $probe = [System.Net.HttpListener]::new()
             $probe.Prefixes.Add($candidate)
             try {
                 $probe.Start()
-                $probe.Stop()
-                $probe.Close()
+                # Bind succeeded — keep this listener alive for the callback.
+                $listener          = $probe
                 $activeRedirectUri = $candidate
+                Write-Log -Level INFO -Category Auth -Message "HTTP listener started on $activeRedirectUri"
                 break
             } catch {
                 $probe.Close()
+                Write-Log -Level INFO -Category Auth -Message "Port $port unavailable: $($_.Exception.Message)"
             }
         }
-        if (-not $activeRedirectUri) {
-            Write-Log -Level ERROR -Category Auth -Message "No free port found in range 18080-18089."
-            Write-Host "Error: Could not find a free port in range 18080-18089." -ForegroundColor Red
+        if (-not $listener) {
+            Write-Log -Level ERROR -Category Auth -Message "No free port found in range 18080-18099."
+            Write-Host "Error: Could not bind to any port in range 18080-18099. Free a port or check local security software." -ForegroundColor Red
             return $false
         }
-        Write-Log -Level INFO -Category Auth -Message "Using redirect URI: $activeRedirectUri"
     }
 
     # redirect_uri must be appended raw (not percent-encoded) so IBM compares the plain URI
     # against its registered list; double-encoding causes 'not authorized' rejections.
     $authorizeUrl = "${AuthorizeBaseUrl}?response_type=code&client_id=${ClientId}&redirect_uri=${activeRedirectUri}&state=${state}&code_challenge=${code_challenge}&code_challenge_method=S256&scope=openid"
-
-    # Start local HTTP listener
-    $listener = $null
-    try {
-        $listener = [System.Net.HttpListener]::new()
-        $listener.Prefixes.Add($activeRedirectUri)
-        $listener.Start()
-        Write-Log -Level INFO -Category Auth -Message "HTTP listener started on $activeRedirectUri"
-    }
-    catch {
-        Write-Log -Level ERROR -Category Auth -Message "Failed to start local HTTP listener on ${activeRedirectUri}: $($_.Exception.Message)"
-        Write-Host "Error: Could not start local HTTP listener on ${activeRedirectUri}: $($_.Exception.Message)" -ForegroundColor Red
-        return $false
-    }
 
     try {
         # Open browser
@@ -110,11 +116,18 @@ function Invoke-IbmLoginSSO {
 
         Write-Host "Waiting for authentication callback on $activeRedirectUri ..." -ForegroundColor Yellow
         Write-Log -Level INFO -Category Auth -Message "Awaiting callback on $activeRedirectUri"
-        $context = $listener.GetContext()
-        $request = $context.Request
-        $response = $context.Response
-
-        Write-Log -Level INFO -Category Auth -Message "Callback received: $($request.Url)"
+        # Ignore stray requests (favicon, prefetch) that carry no code/error; they caused false 'State mismatch'.
+        do {
+            $context = $listener.GetContext()
+            $request = $context.Request
+            $response = $context.Response
+            Write-Log -Level INFO -Category Auth -Message "Request received: $($request.Url.AbsolutePath)"
+            $isCallback = $request.QueryString["code"] -or $request.QueryString["error"]
+            if (-not $isCallback) {
+                $response.StatusCode = 404
+                $response.Close()
+            }
+        } until ($isCallback)
 
         $code          = $request.QueryString["code"]
         $returnedState = $request.QueryString["state"]
