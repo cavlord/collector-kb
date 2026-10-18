@@ -65,6 +65,11 @@ Write-Host "  $('-' * 70)" -ForegroundColor DarkGray
 Write-Host ""
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+function Coalesce {
+    param([object]$Left, [object]$Right)
+    if ($null -ne $Left) { $Left } else { $Right }
+}
+
 function Require-Config {
     param([string[]]$Keys)
     $cfg = Get-Config
@@ -185,7 +190,7 @@ switch ($Command.ToLower()) {
                 $result = Save-Metadata -Judul $doc.Title -SourceUrl $doc.Url `
                                         -Kategori $doc.Category -Subkategori $doc.Subcategory `
                                         -Product $doc.Product -ContentType $doc.ContentType `
-                                        -PublishDate ($doc.PublishDate ?? '') `
+                                        -PublishDate (Coalesce $doc.PublishDate '') `
                                         -Hash $processed.Hash -Status 'new' `
                                         -LocalPath $processed.LocalPath
 
@@ -201,7 +206,7 @@ switch ($Command.ToLower()) {
                                                       -LocalFilePath $processed.LocalPath
 
                 $finalStatus = if ($spUrl) { 'uploaded' } else { 'upload-failed' }
-                Update-MetadataStatus -SourceUrl $doc.Url -Status $finalStatus -SharepointUrl ($spUrl ?? '')
+                Update-MetadataStatus -SourceUrl $doc.Url -Status $finalStatus -SharepointUrl (Coalesce $spUrl '')
 
                 if ($result -eq 'updated') { $totalUpdated++ } else { $totalNew++ }
             }
