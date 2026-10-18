@@ -49,20 +49,49 @@ function Invoke-IbmLoginSSO {
     # Generate state
     $state = [Guid]::NewGuid().ToString("N")
 
-    # Authorize URL
-    $escapedRedirect = [Uri]::EscapeDataString($RedirectUri)
-    $authorizeUrl = "${AuthorizeBaseUrl}?response_type=code&client_id=${ClientId}&redirect_uri=${escapedRedirect}&state=${state}&code_challenge=${code_challenge}&code_challenge_method=S256&scope=openid"
+    # If a specific RedirectUri was supplied, use it as-is; otherwise probe for a free port
+    # starting at 18080 so we can tell the authorize URL the real port before opening the browser.
+    if ($PSBoundParameters.ContainsKey('RedirectUri')) {
+        $activeRedirectUri = $RedirectUri
+    } else {
+        $activeRedirectUri = $null
+        foreach ($port in 18080..18089) {
+            $candidate = "http://localhost:${port}/"
+            $probe = [System.Net.HttpListener]::new()
+            $probe.Prefixes.Add($candidate)
+            try {
+                $probe.Start()
+                $probe.Stop()
+                $probe.Close()
+                $activeRedirectUri = $candidate
+                break
+            } catch {
+                $probe.Close()
+            }
+        }
+        if (-not $activeRedirectUri) {
+            Write-Log -Level ERROR -Category Auth -Message "No free port found in range 18080-18089."
+            Write-Host "Error: Could not find a free port in range 18080-18089." -ForegroundColor Red
+            return $false
+        }
+        Write-Log -Level INFO -Category Auth -Message "Using redirect URI: $activeRedirectUri"
+    }
+
+    # redirect_uri must be appended raw (not percent-encoded) so IBM compares the plain URI
+    # against its registered list; double-encoding causes 'not authorized' rejections.
+    $authorizeUrl = "${AuthorizeBaseUrl}?response_type=code&client_id=${ClientId}&redirect_uri=${activeRedirectUri}&state=${state}&code_challenge=${code_challenge}&code_challenge_method=S256&scope=openid"
 
     # Start local HTTP listener
     $listener = $null
     try {
         $listener = [System.Net.HttpListener]::new()
-        $listener.Prefixes.Add($RedirectUri)
+        $listener.Prefixes.Add($activeRedirectUri)
         $listener.Start()
+        Write-Log -Level INFO -Category Auth -Message "HTTP listener started on $activeRedirectUri"
     }
     catch {
-        Write-Log -Level ERROR -Category Auth -Message "Failed to start local HTTP listener on ${RedirectUri}: $($_.Exception.Message)"
-        Write-Host "Error: Could not start local HTTP listener. Port might be in use: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Log -Level ERROR -Category Auth -Message "Failed to start local HTTP listener on ${activeRedirectUri}: $($_.Exception.Message)"
+        Write-Host "Error: Could not start local HTTP listener on ${activeRedirectUri}: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
 
@@ -79,8 +108,8 @@ function Invoke-IbmLoginSSO {
             }
         }
 
-        Write-Host "Waiting for authentication callback on $RedirectUri ..." -ForegroundColor Yellow
-        Write-Log -Level INFO -Category Auth -Message "HTTP listener started; awaiting callback on $RedirectUri"
+        Write-Host "Waiting for authentication callback on $activeRedirectUri ..." -ForegroundColor Yellow
+        Write-Log -Level INFO -Category Auth -Message "Awaiting callback on $activeRedirectUri"
         $context = $listener.GetContext()
         $request = $context.Request
         $response = $context.Response
@@ -94,9 +123,10 @@ function Invoke-IbmLoginSSO {
 
         # Surface any AS-returned error immediately
         if ($asError) {
-            $errorMsg = "Authorization server error: $asError — $asErrorDesc"
+            $errorMsg = "Authorization server error: $asError - $asErrorDesc"
             Write-Log -Level ERROR -Category Auth -Message $errorMsg
-            $html = "<html><body><h2>Login failed</h2><p>$asError: $asErrorDesc</p><p>You may close this window.</p></body></html>"
+            $errorInfo = "$asError" + ": " + "$asErrorDesc"
+            $html = "<html><body><h2>Login failed</h2><p>$errorInfo</p><p>You may close this window.</p></body></html>"
             $response.StatusCode = 400
             $response.ContentType = "text/html"
             $responseBuffer = [System.Text.Encoding]::UTF8.GetBytes($html)
@@ -151,7 +181,7 @@ function Invoke-IbmLoginSSO {
         $body["grant_type"] = "authorization_code"
         $body["client_id"] = $ClientId
         $body["code"] = $code
-        $body["redirect_uri"] = $RedirectUri
+        $body["redirect_uri"] = $activeRedirectUri
         $body["code_verifier"] = $code_verifier
 
         $content = [System.Net.Http.FormUrlEncodedContent]::new($body)
