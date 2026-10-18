@@ -42,6 +42,28 @@ Initialize-Logger     -LogDir $LogDir
 Initialize-Config     -ConfigDir $DataDir
 Initialize-MetadataStore -DataDir $DataDir
 
+# ── Banner ────────────────────────────────────────────────────────────────────
+$_version = '1.0.0'
+Write-Host ""
+Write-Host "  ██╗██████╗ ███╗   ███╗    ██████╗  ██████╗  ██████╗" -ForegroundColor Cyan
+Write-Host "  ██║██╔══██╗████╗ ████║    ██╔══██╗██╔═══██╗██╔════╝" -ForegroundColor Cyan
+Write-Host "  ██║██████╔╝██╔████╔██║    ██║  ██║██║   ██║██║     " -ForegroundColor Magenta
+Write-Host "  ██║██╔══██╗██║╚██╔╝██║    ██║  ██║██║   ██║██║     " -ForegroundColor Magenta
+Write-Host "  ██║██████╔╝██║ ╚═╝ ██║    ██████╔╝╚██████╔╝╚██████╗" -ForegroundColor DarkMagenta
+Write-Host "  ╚═╝╚═════╝ ╚═╝     ╚═╝    ╚═════╝  ╚═════╝  ╚═════╝" -ForegroundColor DarkMagenta
+Write-Host ""
+Write-Host "  ██████╗ ██████╗ ██╗     ██╗     ███████╗ ██████╗████████╗ ██████╗ ██████╗ " -ForegroundColor DarkCyan
+Write-Host "  ██╔════╝██╔═══██╗██║     ██║     ██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗" -ForegroundColor DarkCyan
+Write-Host "  ██║     ██║   ██║██║     ██║     █████╗  ██║        ██║   ██║   ██║██████╔╝" -ForegroundColor Cyan
+Write-Host "  ██║     ██║   ██║██║     ██║     ██╔══╝  ██║        ██║   ██║   ██║██╔══██╗" -ForegroundColor Cyan
+Write-Host "  ╚██████╗╚██████╔╝███████╗███████╗███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║" -ForegroundColor Magenta
+Write-Host "   ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝" -ForegroundColor Magenta
+Write-Host ""
+Write-Host "  $('-' * 70)" -ForegroundColor DarkGray
+Write-Host "  v$_version  |  IBM Troubleshooting Documentation Collector" -ForegroundColor DarkGray
+Write-Host "  $('-' * 70)" -ForegroundColor DarkGray
+Write-Host ""
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 function Require-Config {
     param([string[]]$Keys)

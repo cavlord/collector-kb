@@ -21,6 +21,31 @@ Install-Module Az.Accounts -Scope CurrentUser
 
 ---
 
+## Instalasi (global)
+
+Jalankan installer sekali dari direktori proyek:
+
+```powershell
+.\install.ps1
+```
+
+Installer akan:
+1. Membuat `%LOCALAPPDATA%\ibm-doc-collector\bin`
+2. Menyalin `cli.ps1`, `ibm-doc-collector.cmd`, dan semua modul ke direktori tersebut
+3. Menambahkan direktori bin ke **PATH** (User scope)
+
+Setelah membuka sesi PowerShell baru, jalankan dari mana saja:
+
+```powershell
+ibm-doc-collector help
+ibm-doc-collector init
+ibm-doc-collector collect --category Support
+```
+
+> **Catatan:** Jika `where ibm-doc-collector` belum menemukan perintah, tutup dan buka kembali terminal agar perubahan PATH aktif.
+
+---
+
 ## Quick Start
 
 ### 1. Configure
