@@ -40,17 +40,26 @@ Setelah membuka sesi PowerShell baru, jalankan dari mana saja:
 ibm-doc-collector help
 ibm-doc-collector init
 ibm-doc-collector collect --category Support
+ibm-doc-collector doctor
 ```
 
 > **Catatan:** Jika `where ibm-doc-collector` belum menemukan perintah, tutup dan buka kembali terminal agar perubahan PATH aktif.
+
+> ⚠️ **Jangan gunakan** `powershell -File ibm-doc-collector.cmd` — PowerShell menolak eksekusi `.cmd` dengan flag `-File`. `ibm-doc-collector.cmd` adalah batch launcher Windows; jalankan langsung tanpa `powershell -File`.
 
 ---
 
 ## Quick Start
 
+> **After global install**, replace `.\cli.ps1` with `ibm-doc-collector` in all commands below.
+> Run the launcher directly — **do not** prefix it with `powershell -File`.
+> `ibm-doc-collector.cmd` is a Windows batch launcher; Windows runs it directly from PATH.
+
 ### 1. Configure
 
 ```powershell
+ibm-doc-collector init
+# or, from the project directory before installing:
 .\cli.ps1 init
 ```
 
@@ -65,33 +74,27 @@ Config is saved to `data/config.json` (never contains tokens or passwords).
 ### 2. Authenticate
 
 ```powershell
-# IBM credentials (interactive prompt — not stored to disk)
-.\cli.ps1 auth ibm
-
-# Microsoft / SharePoint via device-code flow
-.\cli.ps1 auth sharepoint
+ibm-doc-collector auth ibm          # IBM credentials (interactive — not stored to disk)
+ibm-doc-collector auth sharepoint   # Microsoft / SharePoint via device-code flow
 ```
 
 ### 3. Collect
 
 ```powershell
-# All sources
-.\cli.ps1 collect
-
-# Specific category
-.\cli.ps1 collect --category Support
+ibm-doc-collector collect                      # all sources
+ibm-doc-collector collect --category Support   # specific category
 ```
 
 ### 4. Check status
 
 ```powershell
-.\cli.ps1 status
+ibm-doc-collector status
 ```
 
 ### 5. Export report
 
 ```powershell
-.\cli.ps1 report
+ibm-doc-collector report
 ```
 
 Writes a CSV to `data/report_<timestamp>.csv`.
@@ -99,7 +102,7 @@ Writes a CSV to `data/report_<timestamp>.csv`.
 ### 6. Health check
 
 ```powershell
-.\cli.ps1 doctor
+ibm-doc-collector doctor
 ```
 
 Checks PowerShell version, config keys, auth state, MSAL availability, and SharePoint connectivity.
