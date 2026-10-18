@@ -67,7 +67,7 @@ if ($IsWindows) {
     }
 } else {
     $shell = if ($env:SHELL -like '*zsh*') { "$HOME/.zshrc" } else { "$HOME/.bashrc" }
-    $exportLine = "export PATH=`"$BinDir:`$PATH`""
+    $exportLine = "export PATH=`"${BinDir}:$PATH`""
     $content = if (Test-Path $shell) { Get-Content $shell -Raw } else { '' }
     if ($content -notlike "*$BinDir*") {
         Add-Content -Path $shell -Value "`n# ibm-doc-collector`n$exportLine"
